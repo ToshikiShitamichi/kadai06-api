@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プログラミングチャット</title>
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/quill-emoji@0.2.0/dist/quill-emoji.css">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <link rel="stylesheet" href="./css/google.css">
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+    <div class="start">
+        <h1>プログラミングチャット</h1>
+        <button class="gsi-material-button">
+            <div class="gsi-material-button-state"></div>
+            <div class="gsi-material-button-content-wrapper">
+                <div class="gsi-material-button-icon">
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"
+                        xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
+                        <path fill="#EA4335"
+                            d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z">
+                        </path>
+                        <path fill="#4285F4"
+                            d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z">
+                        </path>
+                        <path fill="#FBBC05"
+                            d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z">
+                        </path>
+                        <path fill="#34A853"
+                            d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z">
+                        </path>
+                        <path fill="none" d="M0 0h48v48H0z"></path>
+                    </svg>
+                </div>
+                <span class="gsi-material-button-contents">Sign in with Google</span>
+                <span style="display: none;">Sign in with Google</span>
+            </div>
+        </button>
+    </div>
+    <div class="content container">
+        <div class="navbar">
+            <div class="navbar-header">
+                <div class="logo"><button class="material-symbols-outlined">
+                        code_blocks
+                    </button></div>
+                <div class="icon"><button class="material-symbols-outlined current-nav" id="home">home</button></div>
+                <div class="icon"><button class="material-symbols-outlined" id="video">videocam</button></div>
+
+            </div>
+            <div class="navbar-footer">
+                <div id="user-icon"><button class="material-symbols-outlined">person</button></div>
+            </div>
+
+
+        </div>
+        <div class="thread">
+            <div class="thread-header">
+                <div class="thread-create"><button class="material-symbols-outlined">edit_square</button></div>
+            </div>
+            <div class="thread-list">
+            </div>
+        </div>
+        <div class="chat">
+            <div class="chat-header">
+            </div>
+            <div class="chat-list">
+            </div>
+            <div class="chat-editor">
+                <div id="editor">
+                </div>
+                <div class="send"><button id="send" class="material-symbols-outlined">send</button></div>
+            </div>
+        </div>
+        <div class="rooms" style="display: none;">
+            <div class="room-header">
+                <div class="room-create"><button class="material-symbols-outlined">edit_square</button></div>
+            </div>
+            <div class="room-list">
+            </div>
+        </div>
+        <div class="video" style="display: none;">
+            <div class="video-header">
+            </div>
+            <div class="video-content">
+                <div id="video-grid" class="video-grid">
+                    <!-- 自分のタイル -->
+                    <div class="video-tile me" id="tile-me">
+                        <div class="video-label">
+                            あなた: <span id="my-id"></span>
+                        </div>
+
+                        <video id="local-video" muted playsinline></video>
+
+                        <!-- 入室後にだけ表示される操作ボタン -->
+                        <div class="video-controls" id="my-controls" hidden>
+                            <button id="audio-mute" class="icon-button material-symbols-outlined" title="マイク ON/OFF">
+                                mic_off
+                            </button>
+                            <button id="video-mute" class="icon-button material-symbols-outlined" title="カメラ ON/OFF">
+                                videocam_off
+                            </button>
+                            <button id="display-stream" class="icon-button material-symbols-outlined"
+                                title="画面共有 ON/OFF">
+                                present_to_all
+                            </button>
+                            <button id="background-blur" class="icon-button material-symbols-outlined"
+                                title="背景ぼかし ON/OFF">
+                                background_replace
+                            </button>
+                            <button id="leave" class="icon-button material-symbols-outlined" title="退室">
+                                exit_to_app
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- Include the Quill library -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.js"></script>
+    <script src="https://unpkg.com/quill-emoji@0.2.0/dist/quill-emoji.js"></script>
+
+    <!-- SkyWay -->
+    <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
+
+    <!-- firebase -->
+    <script type="module" src="./js/api.js"></script>
+    <script type="module" src="./js/main.js"></script>
+
+</body>
+
+</html>
