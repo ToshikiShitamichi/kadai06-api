@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import { getDatabase, ref, set, push, onValue, update, get, remove, off } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
 
-import firebaseConfig from "./api.js";
+import { firebaseConfig, skyway_api } from "./api.js";
 
 // Firebase 初期化
 const app = initializeApp(firebaseConfig);
@@ -473,7 +473,7 @@ const token = new SkyWayAuthToken({
             },
         ],
     },
-}).encode("j5SMwlJ67ApERGqMLiP2D4MLGnXRFtBaUgLpioup4+s=");
+}).encode(skyway_api);
 
 (async () => {
     const localVideo = document.getElementById("local-video");
@@ -534,7 +534,9 @@ const token = new SkyWayAuthToken({
         });
 
         // Roomに入室して自分のIDを表示
-        const me = await room.join();
+        const me = await room.join({
+            metadata: JSON.stringify({ displayName: currentUser.displayName })
+        });
         myId.textContent = currentUser.displayName;
 
         // 自分の映像・音声をpublish
@@ -544,6 +546,14 @@ const token = new SkyWayAuthToken({
         isVideoMuted = false;
         localAudioMuteButton.textContent = "mic";
         localVideoMuteButton.textContent = "videocam";
+
+        let displayVideoPublication = null;
+        let displayVideoStream = null;
+
+        const getDisplayName = (member) => {
+            try { return JSON.parse(member.metadata).displayName; } catch (e) { }
+            return member?.name || member?.id || "Guest";
+        };
 
         // 映像・音声をsubscribeして再生
         const subscribeAndAttach = async (publication) => {
@@ -565,17 +575,30 @@ const token = new SkyWayAuthToken({
             let remoteMedia;
             switch (stream.track.kind) {
                 case "video":
-                    // video要素の生成
+                    const tileId = `remote-tile-${publication.publisher.id}`;
+                    let tile = document.getElementById(tileId);
+                    if (!tile) {
+                        tile = document.createElement("div");
+                        tile.className = "video-tile remote";
+                        tile.id = tileId;
+
+                        const label = document.createElement("div");
+                        label.className = "video-label";
+                        label.textContent = `参加者: ${getDisplayName(publication.publisher)}`;
+                        tile.appendChild(label);
+
+                        remoteVideoArea.appendChild(tile);
+                    }
+
+                    // video要素
                     remoteMedia = document.createElement("video");
                     remoteMedia.playsInline = true;
                     remoteMedia.autoplay = true;
                     stream.attach(remoteMedia);
                     remoteMedia.id = `remote-media-${publication.id}`;
+                    tile.appendChild(remoteMedia);
 
-                    // 受信側の一時停止処理
                     publication.onDisabled.add(() => remoteMedia.load());
-
-                    remoteVideoArea.appendChild(remoteMedia);
                     break;
                 case "audio":
                     remoteMedia = document.createElement("audio");
@@ -624,7 +647,7 @@ const token = new SkyWayAuthToken({
         };
 
         displayStreamButton.onclick = async () => {
-            const { audio, video:dispVideo } = await SkyWayStreamFactory.createDisplayStreams(
+            const { audio, video: dispVideo } = await SkyWayStreamFactory.createDisplayStreams(
                 {
                     audio: true, // 音声も取得する
                     video: {
@@ -633,8 +656,8 @@ const token = new SkyWayAuthToken({
                 }
             );
             await localVideoPublication.disable();
-            let dispralStreamPublication = await me.publish(dispVideo);
-            await displayStreamButton.play()
+            let displayStreamPublication = await me.publish(dispVideo);
+            await displayStreamPublication.play()
         }
 
         // 自分が退室する処理
