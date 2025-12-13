@@ -504,8 +504,6 @@ const token = new SkyWayAuthToken({
     $(document).on("click", "#join", async function () {
         const joinButton = document.getElementById("join");
         const roomNameInput = document.getElementById("room-name");
-        //   joinButton.onclick = async () => {
-        console.log("join");
 
         // room名が空白の場合はスキップ
         if (roomNameInput.value === "") return;
@@ -535,6 +533,7 @@ const token = new SkyWayAuthToken({
 
         // Roomに入室して自分のIDを表示
         const me = await room.join({
+            name: currentUser.uid,
             metadata: JSON.stringify({ displayName: currentUser.displayName })
         });
         myId.textContent = currentUser.displayName;
@@ -551,8 +550,12 @@ const token = new SkyWayAuthToken({
         let displayVideoStream = null;
 
         const getDisplayName = (member) => {
-            try { return JSON.parse(member.metadata).displayName; } catch (e) { }
-            return member?.name || member?.id || "Guest";
+            try {
+                const obj = JSON.parse(member?.metadata || "{}");
+                return obj.displayName || member?.name || member?.id || "Guest";
+            } catch (e) {
+                return member?.name || member?.id || "Guest";
+            }
         };
 
         // 映像・音声をsubscribeして再生
@@ -560,23 +563,14 @@ const token = new SkyWayAuthToken({
             // 自分自身の映像・音声だったらskip
             if (publication.publisher.id === me.id) return;
 
-            // subscribeするためのボタンを生成
-            // const subscribeButton = document.createElement("button");
-            // subscribeButton.id = `subscribe-button-${publication.id}`;
-            // subscribeButton.textContent = `${publication.publisher.id}: ${publication.contentType}`;
-            // buttonArea.appendChild(subscribeButton);
-
-            // // 取得した映像・音声を受信
-            // subscribeButton.onclick = async () => {
-            //     subscribeButton.disabled = true;
-
             const { stream } = await me.subscribe(publication.id);
+
             // 他の人の映像・音声を再生する要素を生成
             let remoteMedia;
             switch (stream.track.kind) {
                 case "video":
-                    const tileId = `remote-tile-${publication.publisher.id}`;
-                    let tile = document.getElementById(tileId);
+                    const key = publication.publisher.name || publication.publisher.id; // name(uid)優先
+                    const tileId = `remote-tile-${key}`; let tile = document.getElementById(tileId);
                     if (!tile) {
                         tile = document.createElement("div");
                         tile.className = "video-tile remote";
@@ -646,7 +640,31 @@ const token = new SkyWayAuthToken({
             }
         };
 
+        const stopScreenShare = async () => {
+            if (!displayVideoPublication) return;
+
+            // 画面共有の publish を止める
+            await me.unpublish(displayVideoPublication.id);
+            displayVideoPublication = null;
+
+            // カメラ publish に戻す（入室時のON/OFF状態を維持）
+            localVideoPublication = await me.publish(video);
+            if (isVideoMuted) await localVideoPublication.disable();
+            else await localVideoPublication.enable();
+
+            // 自分プレビューもカメラに戻す
+            video.attach(localVideo);
+            await localVideo.play();
+
+            displayVideoStream?.track?.stop?.();
+            displayVideoStream = null;
+        };
+
         displayStreamButton.onclick = async () => {
+            if (displayVideoPublication) {  // 共有中なら停止
+                await stopScreenShare();
+                return;
+            }
             const { audio, video: dispVideo } = await SkyWayStreamFactory.createDisplayStreams(
                 {
                     audio: true, // 音声も取得する
@@ -655,9 +673,17 @@ const token = new SkyWayAuthToken({
                     }
                 }
             );
-            await localVideoPublication.disable();
-            let displayStreamPublication = await me.publish(dispVideo);
-            await displayStreamPublication.play()
+            await me.unpublish(localVideoPublication.id);
+            displayVideoPublication = await me.publish(dispVideo);
+
+            // プレビューを共有映像へ
+            dispVideo.attach(localVideo);
+            await localVideo.play();
+
+            // 共有を「ブラウザの共有停止」ボタンで終えた時も復帰
+            dispVideo.track.onended = async () => {
+                await stopScreenShare();
+            };
         }
 
         // 自分が退室する処理
@@ -684,10 +710,13 @@ const token = new SkyWayAuthToken({
 
         // 他の人が退室した場合の処理
         room.onStreamUnpublished.add((e) => {
-            // 対応する映像/音声要素を削除
-            document
-                .getElementById(`remote-media-${e.publication.id}`)
-                ?.remove();
+            document.getElementById(`remote-media-${e.publication.id}`)?.remove();
+
+            const key = e.publication.publisher.name || e.publication.publisher.id;
+            const tile = document.getElementById(`remote-tile-${key}`);
+            if (tile && tile.querySelectorAll("video").length === 0) {
+                tile.remove();
+            }
         });
 
         // ルームを切り替えた時に退出
