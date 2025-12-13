@@ -353,7 +353,7 @@ onValue(roomRef, (snapshot) => {
         let itemHtml
         if (currentRoomId === room.id) {
             itemHtml = `<p class="room-title current-room" data-room-id="${room.id}">${room.title}</p>`;
-            $(".video-header").html(`<h3>${room.title}<input id="room-name" type="text" value="${room.title}" hidden><button id="join" class="material-symbols-outlined">video_call</button></h3>`);
+            $(".video-header").html(`<h3 style="display:flex;">${room.title}<input id="room-name" type="text" value="${room.title}" hidden><button id="join" class="material-symbols-outlined">video_call</button></h3>`);
         } else {
             itemHtml = `<p class="room-title" data-room-id="${room.id}">${room.title}</p>`;
         }
@@ -375,7 +375,7 @@ $(document).on("click", ".room-title", function () {
     $(this).addClass("current-room");
 
     // ヘッダー更新
-    $(".video-header").html(`<h3>${$(this).text()}<input id="room-name" type="text" value="${$(this).text()}" hidden><button id="join" class="material-symbols-outlined">video_call</button></h3>`);
+    $(".video-header").html(`<h3 style="display:flex;">${$(this).text()}<input id="room-name" type="text" value="${$(this).text()}" hidden><button id="join" class="material-symbols-outlined">video_call</button></h3>`);
 
     // カレントルームIDを保存
     currentRoomId = roomId;
@@ -643,6 +643,10 @@ const token = new SkyWayAuthToken({
         const stopScreenShare = async () => {
             if (!displayVideoPublication) return;
 
+            displayStreamButton.style.display = ""
+            backgroundBlurButton.style.display = ""
+            leaveButton.style.display = ""
+
             // 画面共有の publish を止める
             await me.unpublish(displayVideoPublication.id);
             displayVideoPublication = null;
@@ -661,10 +665,10 @@ const token = new SkyWayAuthToken({
         };
 
         displayStreamButton.onclick = async () => {
-            if (displayVideoPublication) {  // 共有中なら停止
-                await stopScreenShare();
-                return;
-            }
+            displayStreamButton.style.display = "none"
+            backgroundBlurButton.style.display = "none"
+            leaveButton.style.display = "none"
+
             const { audio, video: dispVideo } = await SkyWayStreamFactory.createDisplayStreams(
                 {
                     audio: true, // 音声も取得する
