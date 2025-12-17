@@ -85,24 +85,26 @@
         </div>
         <div class="video">
             <div class="video-header"></div>
-            <div class="video-content">
-                <video id="local-video" muted playsinline></video>
-                <div id="video-controls" hidden>
-                    <button id="audio-mute" class="icon-button material-symbols-outlined">
-                        mic
-                    </button>
-                    <button id="video-mute" class="icon-button material-symbols-outlined">
-                        videocam
-                    </button>
-                    <button id="leave" class="icon-button material-symbols-outlined">
-                        exit_to_app
-                    </button>
+            <div id="video-content">
+                <div class="video-grid">
+                    <video id="local-video" muted playsinline></video>
+                    <div class="absolute">
+                        <p class="label" id="my-name" hidden>あなた</p>
+                        <div class="video-controls" id="video-controls" hidden>
+                            <button id="audio-mute" class="icon-button material-symbols-outlined">
+                                mic
+                            </button>
+                            <button id="video-mute" class="icon-button material-symbols-outlined">
+                                videocam
+                            </button>
+                            <button id="leave" class="icon-button material-symbols-outlined">
+                                exit_to_app
+                            </button>
+                        </div>
+                    </div>
                 </div>
-
-                <div id="button-area"></div>
-                <div id="remote-video-area"></div>
-                <div id="remote-audio-area"></div>
             </div>
+            <div id="remote-audio-area"></div>
         </div>
     </div>
 

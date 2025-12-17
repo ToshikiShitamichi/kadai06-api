@@ -454,6 +454,24 @@ $("#video").on("click", function () {
     $(".chat").css("display", "none");
 });
 
+const videoContent = document.getElementById("video-content");
+
+function updateVideoGridLayout() {
+    let count = videoContent.querySelectorAll(".video-grid").length;
+    if (count > 9) count = 9;
+
+    let cols = 2, rows = 1;
+
+    if (count <= 6) {
+        cols = 3; rows = 2;      // 5～6人 → 2*3（= 3列×2行）
+    } else {
+        cols = 3; rows = 3;      // 7～9人 → 3*3
+    }
+
+    videoContent.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    videoContent.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+}
+
 /***  STEP 1. 認証・認可用のトークンを生成 ***/
 const token = new SkyWayAuthToken({
     jti: uuidV4(),
@@ -476,17 +494,14 @@ const token = new SkyWayAuthToken({
 }).encode(skyway_api);
 
 (async () => {
-    const localVideo = document.getElementById("local-video");
-    const buttonArea = document.getElementById("button-area");
-    const remoteVideoArea = document.getElementById("remote-video-area");
+    let localVideo = document.getElementById("local-video");
     const remoteAudioArea = document.getElementById("remote-audio-area");
     let roomNameInput = document.getElementById("room-name");
 
-    const myId = document.getElementById("my-id");
     let joinButton = document.getElementById("join");
-    const localAudioMuteButton = document.getElementById("audio-mute");
-    const localVideoMuteButton = document.getElementById("video-mute");
-    const leaveButton = document.getElementById("leave");
+    let localAudioMuteButton = document.getElementById("audio-mute");
+    let localVideoMuteButton = document.getElementById("video-mute");
+    let leaveButton = document.getElementById("leave");
     leaveButton.disabled = true;
     let isAudioMuted = false;
     let isVideoMuted = false;
@@ -503,7 +518,9 @@ const token = new SkyWayAuthToken({
             await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream();
         video.attach(localVideo);
         await localVideo.play();
+        updateVideoGridLayout()
 
+        $("#my-name").removeAttr("hidden");
         $("#video-controls").removeAttr("hidden");
         localAudioMuteButton.disabled = false;
         localVideoMuteButton.disabled = false;
@@ -528,49 +545,55 @@ const token = new SkyWayAuthToken({
 
         /*** STEP 7. 映像・音声をsubscribeして再生 ***/
         //== STEP 7-1. subscribeした時の処理 ==
-        const subscribeAndAttach = (publication) => {
+        const subscribeAndAttach = async (publication) => {
             if (publication.publisher.id === me.id) return; // 自分自身の映像・音声だったらskip
 
-            // subscribeするためのボタンを生成
-            const subscribeButton = document.createElement("button");
-            subscribeButton.id = `subscribe-button-${publication.id}`;
-            subscribeButton.textContent = `${publication.publisher.id}: ${publication.contentType}`;
-            buttonArea.appendChild(subscribeButton);
+            const { stream, subscription } = await me.subscribe(publication.id);
 
-            // 取得した映像・音声を受信
-            subscribeButton.onclick = async () => {
-                subscribeButton.disabled = true;
+            // 他の人の映像・音声を再生する要素を生成
+            let remoteMedia;
+            switch (stream.track.kind) {
+                case "video":
+                    // video要素の生成
+                    remoteMedia = document.createElement("video");
+                    remoteMedia.playsInline = true;
+                    remoteMedia.autoplay = true;
+                    stream.attach(remoteMedia);
+                    remoteMedia.id = `remote-media-${publication.id}`
 
-                const { stream, subscription } = await me.subscribe(publication.id);
+                    //== STEP 8-2. 受信側の一時停止処理 ==
+                    publication.onDisabled.add(() => remoteMedia.load());
 
-                // 他の人の映像・音声を再生する要素を生成
-                let remoteMedia;
-                switch (stream.track.kind) {
-                    case "video":
-                        // video要素の生成
-                        remoteMedia = document.createElement("video");
-                        remoteMedia.playsInline = true;
-                        remoteMedia.autoplay = true;
-                        stream.attach(remoteMedia);
-                        remoteMedia.id = `remote-media-${publication.id}`
+                    const grid = document.createElement("div");
+                    grid.className = "video-grid";
 
-                        //== STEP 8-2. 受信側の一時停止処理 ==
-                        publication.onDisabled.add(() => remoteMedia.load());
+                    const abs = document.createElement("div");
+                    abs.className = "absolute";
 
-                        remoteVideoArea.appendChild(remoteMedia);
-                        break;
-                    case "audio":
-                        remoteMedia = document.createElement("audio");
-                        remoteMedia.controls = true;
-                        remoteMedia.autoplay = true;
-                        stream.attach(remoteMedia);
-                        remoteMedia.id = `remote-media-${publication.id}`
-                        remoteAudioArea.appendChild(remoteMedia);
-                        break;
-                    default:
-                        return;
-                }
-            };
+                    const label = document.createElement("p");
+                    label.className = "label";
+                    label.textContent = publication.id;
+
+                    abs.appendChild(label);
+                    grid.appendChild(remoteMedia);
+                    grid.appendChild(abs);
+
+                    videoContent.appendChild(grid);
+                    updateVideoGridLayout()
+
+                    break;
+                case "audio":
+                    remoteMedia = document.createElement("audio");
+                    remoteMedia.controls = true;
+                    remoteMedia.autoplay = true;
+                    stream.attach(remoteMedia);
+                    remoteMedia.id = `remote-media-${publication.id}`
+                    remoteAudioArea.appendChild(remoteMedia);
+                    break;
+                default:
+                    return;
+            }
+            // };
         };
         //== STEP 7-2. Room入室時にすでにpublishされている映像・音声を受信 ==
         room.publications.forEach(subscribeAndAttach);
@@ -605,24 +628,50 @@ const token = new SkyWayAuthToken({
         /*** STEP 9. 退出処理 ***/
         // 自分が退室する処理
         leaveButton.onclick = async () => {
+            await localAudioPublication.disable();
+            await localVideoPublication.disable();
+
             await me.leave();
             await room.dispose();
 
-            buttonArea.replaceChildren();
-            remoteVideoArea.replaceChildren();
+            videoContent.replaceChildren();
+            $(videoContent).html(`
+                <div class="video-grid">
+                    <video id="local-video" muted playsinline></video>
+                    <div class="absolute">
+                        <p class="label" id="my-name" hidden>あなた</p>
+                        <div class="video-controls" id="video-controls" hidden>
+                            <button id="audio-mute" class="icon-button material-symbols-outlined">
+                                mic
+                            </button>
+                            <button id="video-mute" class="icon-button material-symbols-outlined">
+                                videocam
+                            </button>
+                            <button id="leave" class="icon-button material-symbols-outlined">
+                                exit_to_app
+                            </button>
+                        </div>
+            `);
+            localVideo = document.getElementById("local-video");
+            localAudioMuteButton = document.getElementById("audio-mute");
+            localVideoMuteButton = document.getElementById("video-mute");
+            leaveButton = document.getElementById("leave");
+
             remoteAudioArea.replaceChildren();
 
             leaveButton.disabled = true;
             localAudioMuteButton.disabled = true;
             localVideoMuteButton.disabled = true;
             joinButton.disabled = false;
+            $("#my-name").attr("hidden", "hidden");
             $("#video-controls").attr("hidden", "hidden");
+            updateVideoGridLayout()
         };
 
         // 他の人が退室した場合の処理
         room.onStreamUnpublished.add((e) => {
-            document.getElementById(`subscribe-button-${e.publication.id}`)?.remove();
-            document.getElementById(`remote-media-${e.publication.id}`)?.remove();
+            document.getElementById(`remote-media-${e.publication.id}`)?.closest(".video-grid")?.remove();
+            updateVideoGridLayout()
         });
     });
 })();
