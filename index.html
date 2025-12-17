@@ -48,7 +48,8 @@
                         code_blocks
                     </button></div>
                 <div class="icon"><button class="material-symbols-outlined" id="home">home</button></div>
-                <div class="icon"><button class="material-symbols-outlined current-nav" id="video">videocam</button></div>
+                <div class="icon"><button class="material-symbols-outlined current-nav" id="video">videocam</button>
+                </div>
 
             </div>
             <div class="navbar-footer">
@@ -64,7 +65,7 @@
             <div class="thread-list">
             </div>
         </div>
-        <div class="chat"  style="display: none;">
+        <div class="chat" style="display: none;">
             <div class="chat-header">
             </div>
             <div class="chat-list">
@@ -83,40 +84,24 @@
             </div>
         </div>
         <div class="video">
-            <div class="video-header">
-            </div>
+            <div class="video-header"></div>
             <div class="video-content">
-                <div id="video-grid" class="video-grid">
-                    <!-- 自分のタイル -->
-                    <div class="video-tile me" id="tile-me">
-                        <div class="video-label">
-                            あなた: <span id="my-id"></span>
-                        </div>
-
-                        <video id="local-video" muted playsinline></video>
-
-                        <!-- 入室後にだけ表示される操作ボタン -->
-                        <div class="video-controls" id="my-controls" hidden>
-                            <button id="audio-mute" class="icon-button material-symbols-outlined" title="マイク ON/OFF">
-                                mic_off
-                            </button>
-                            <button id="video-mute" class="icon-button material-symbols-outlined" title="カメラ ON/OFF">
-                                videocam_off
-                            </button>
-                            <button id="display-stream" class="icon-button material-symbols-outlined"
-                                title="画面共有 ON/OFF">
-                                present_to_all
-                            </button>
-                            <button id="background-blur" class="icon-button material-symbols-outlined"
-                                title="背景ぼかし ON/OFF">
-                                background_replace
-                            </button>
-                            <button id="leave" class="icon-button material-symbols-outlined" title="退室">
-                                exit_to_app
-                            </button>
-                        </div>
-                    </div>
+                <video id="local-video" muted playsinline></video>
+                <div id="video-controls" hidden>
+                    <button id="audio-mute" class="icon-button material-symbols-outlined">
+                        mic
+                    </button>
+                    <button id="video-mute" class="icon-button material-symbols-outlined">
+                        videocam
+                    </button>
+                    <button id="leave" class="icon-button material-symbols-outlined">
+                        exit_to_app
+                    </button>
                 </div>
+
+                <div id="button-area"></div>
+                <div id="remote-video-area"></div>
+                <div id="remote-audio-area"></div>
             </div>
         </div>
     </div>

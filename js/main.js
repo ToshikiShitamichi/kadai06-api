@@ -454,7 +454,7 @@ $("#video").on("click", function () {
     $(".chat").css("display", "none");
 });
 
-// 認証・認可用のトークンを生成
+/***  STEP 1. 認証・認可用のトークンを生成 ***/
 const token = new SkyWayAuthToken({
     jti: uuidV4(),
     iat: nowInSec(),
@@ -478,143 +478,107 @@ const token = new SkyWayAuthToken({
 (async () => {
     const localVideo = document.getElementById("local-video");
     const buttonArea = document.getElementById("button-area");
-    const remoteVideoArea = document.getElementById("video-grid");
-    const remoteAudioArea = document.getElementById("video-grid");
+    const remoteVideoArea = document.getElementById("remote-video-area");
+    const remoteAudioArea = document.getElementById("remote-audio-area");
+    let roomNameInput = document.getElementById("room-name");
 
     const myId = document.getElementById("my-id");
-    const videoControl = document.querySelector(".video-controls");
+    let joinButton = document.getElementById("join");
     const localAudioMuteButton = document.getElementById("audio-mute");
     const localVideoMuteButton = document.getElementById("video-mute");
-    const displayStreamButton = document.getElementById("display-stream");
-    const backgroundBlurButton = document.getElementById("background-blur");
     const leaveButton = document.getElementById("leave");
-
-    // 入室前はボタン使えない＋非表示
-    localAudioMuteButton.disabled = true;
-    localVideoMuteButton.disabled = true;
-    displayStreamButton.disabled = true;
-    backgroundBlurButton.disabled = true;
     leaveButton.disabled = true;
-    if (videoControl) videoControl.style.display = "none";
+    let isAudioMuted = false;
+    let isVideoMuted = false;
 
-    let isAudioMuted = true; // 相手にはミュート状態として扱う
-    let isVideoMuted = true;
 
-    // 参加ボタンが押された時の処理
+    // ボタンが押された時の処理
     $(document).on("click", "#join", async function () {
-        const joinButton = document.getElementById("join");
-        const roomNameInput = document.getElementById("room-name");
+        joinButton = document.getElementById("join");
+        roomNameInput = document.getElementById("room-name");
+        if (roomNameInput.value === "") return; // Room名が空白の場合はSkip
 
-        // room名が空白の場合はスキップ
-        if (roomNameInput.value === "") return;
-
-        // 自分自身の映像・音声を取得して描画（自分のプレビュー）
+        /***  STEP 2. 自分自身の映像・音声を取得して描画 ***/
         const { audio, video } =
             await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream();
         video.attach(localVideo);
         await localVideo.play();
 
+        $("#video-controls").removeAttr("hidden");
         localAudioMuteButton.disabled = false;
         localVideoMuteButton.disabled = false;
-        displayStreamButton.disabled = false;
-        backgroundBlurButton.disabled = false
         leaveButton.disabled = false;
         joinButton.disabled = true;
-        if (videoControl) videoControl.style.display = "flex";
 
-        // アプリケーションの設定管理の中核となるオブジェクトを生成
+        /*** STEP 3. アプリケーションの設定管理の中核となるオブジェクトを生成 ***/
         const context = await SkyWayContext.Create(token);
 
-        // Roomの取得もしくは作成
+        /*** STEP 4. Roomの取得もしくは作成 ***/
         const room = await SkyWayRoom.FindOrCreate(context, {
             type: "p2p",
             name: roomNameInput.value,
         });
 
-        // Roomに入室して自分のIDを表示
-        const me = await room.join({
-            name: currentUser.uid,
-            metadata: JSON.stringify({ displayName: currentUser.displayName })
-        });
-        myId.textContent = currentUser.displayName;
+        /*** STEP 5. Roomに入室して自分のIDを表示 ***/
+        const me = await room.join();
 
-        // 自分の映像・音声をpublish
-        let localAudioPublication = await me.publish(audio);
-        let localVideoPublication = await me.publish(video);
-        isAudioMuted = false;
-        isVideoMuted = false;
-        localAudioMuteButton.textContent = "mic";
-        localVideoMuteButton.textContent = "videocam";
+        /*** STEP 6. 自分の映像・音声をpublish ***/
+        const localAudioPublication = await me.publish(audio);
+        const localVideoPublication = await me.publish(video);
 
-        let displayVideoPublication = null;
-        let displayVideoStream = null;
+        /*** STEP 7. 映像・音声をsubscribeして再生 ***/
+        //== STEP 7-1. subscribeした時の処理 ==
+        const subscribeAndAttach = (publication) => {
+            if (publication.publisher.id === me.id) return; // 自分自身の映像・音声だったらskip
 
-        const getDisplayName = (member) => {
-            try {
-                const obj = JSON.parse(member?.metadata || "{}");
-                return obj.displayName || member?.name || member?.id || "Guest";
-            } catch (e) {
-                return member?.name || member?.id || "Guest";
-            }
+            // subscribeするためのボタンを生成
+            const subscribeButton = document.createElement("button");
+            subscribeButton.id = `subscribe-button-${publication.id}`;
+            subscribeButton.textContent = `${publication.publisher.id}: ${publication.contentType}`;
+            buttonArea.appendChild(subscribeButton);
+
+            // 取得した映像・音声を受信
+            subscribeButton.onclick = async () => {
+                subscribeButton.disabled = true;
+
+                const { stream, subscription } = await me.subscribe(publication.id);
+
+                // 他の人の映像・音声を再生する要素を生成
+                let remoteMedia;
+                switch (stream.track.kind) {
+                    case "video":
+                        // video要素の生成
+                        remoteMedia = document.createElement("video");
+                        remoteMedia.playsInline = true;
+                        remoteMedia.autoplay = true;
+                        stream.attach(remoteMedia);
+                        remoteMedia.id = `remote-media-${publication.id}`
+
+                        //== STEP 8-2. 受信側の一時停止処理 ==
+                        publication.onDisabled.add(() => remoteMedia.load());
+
+                        remoteVideoArea.appendChild(remoteMedia);
+                        break;
+                    case "audio":
+                        remoteMedia = document.createElement("audio");
+                        remoteMedia.controls = true;
+                        remoteMedia.autoplay = true;
+                        stream.attach(remoteMedia);
+                        remoteMedia.id = `remote-media-${publication.id}`
+                        remoteAudioArea.appendChild(remoteMedia);
+                        break;
+                    default:
+                        return;
+                }
+            };
         };
-
-        // 映像・音声をsubscribeして再生
-        const subscribeAndAttach = async (publication) => {
-            // 自分自身の映像・音声だったらskip
-            if (publication.publisher.id === me.id) return;
-
-            const { stream } = await me.subscribe(publication.id);
-
-            // 他の人の映像・音声を再生する要素を生成
-            let remoteMedia;
-            switch (stream.track.kind) {
-                case "video":
-                    const key = publication.publisher.name || publication.publisher.id; // name(uid)優先
-                    const tileId = `remote-tile-${key}`; let tile = document.getElementById(tileId);
-                    if (!tile) {
-                        tile = document.createElement("div");
-                        tile.className = "video-tile remote";
-                        tile.id = tileId;
-
-                        const label = document.createElement("div");
-                        label.className = "video-label";
-                        label.textContent = `参加者: ${getDisplayName(publication.publisher)}`;
-                        tile.appendChild(label);
-
-                        remoteVideoArea.appendChild(tile);
-                    }
-
-                    // video要素
-                    remoteMedia = document.createElement("video");
-                    remoteMedia.playsInline = true;
-                    remoteMedia.autoplay = true;
-                    stream.attach(remoteMedia);
-                    remoteMedia.id = `remote-media-${publication.id}`;
-                    tile.appendChild(remoteMedia);
-
-                    publication.onDisabled.add(() => remoteMedia.load());
-                    break;
-                case "audio":
-                    remoteMedia = document.createElement("audio");
-                    remoteMedia.autoplay = true;
-                    // 画面には出さないが音だけ鳴らしたい
-                    remoteMedia.classList.add("remote-audio");
-                    stream.attach(remoteMedia);
-                    remoteMedia.id = `remote-media-${publication.id}`;
-                    remoteAudioArea.appendChild(remoteMedia);
-                    break;
-                default:
-                    return;
-            }
-        };
-
-        // Room入室時にすでにpublishされている映像・音声を受信
+        //== STEP 7-2. Room入室時にすでにpublishされている映像・音声を受信 ==
         room.publications.forEach(subscribeAndAttach);
-
-        // Room入室後に他Memberがpublishした映像・音声を受信
+        //== STEP 7-3. Room入室後に他Memberがpublishした映像・音声を受信 ==
         room.onStreamPublished.add((e) => subscribeAndAttach(e.publication));
 
-        // 送信側の音声一時停止処理
+        /*** STEP 8. 一時停止の実装 ***/
+        //== STEP 8-1. 送信側の一時停止処理 ==
         localAudioMuteButton.onclick = async () => {
             if (isAudioMuted) {
                 await localAudioPublication.enable();
@@ -626,8 +590,6 @@ const token = new SkyWayAuthToken({
                 localAudioMuteButton.textContent = "mic_off";
             }
         };
-
-        // 送信側の映像一時停止処理
         localVideoMuteButton.onclick = async () => {
             if (isVideoMuted) {
                 await localVideoPublication.enable();
@@ -640,95 +602,27 @@ const token = new SkyWayAuthToken({
             }
         };
 
-        const stopScreenShare = async () => {
-            if (!displayVideoPublication) return;
-
-            displayStreamButton.style.display = ""
-            backgroundBlurButton.style.display = ""
-            leaveButton.style.display = ""
-
-            // 画面共有の publish を止める
-            await me.unpublish(displayVideoPublication.id);
-            displayVideoPublication = null;
-
-            // カメラ publish に戻す（入室時のON/OFF状態を維持）
-            localVideoPublication = await me.publish(video);
-            if (isVideoMuted) await localVideoPublication.disable();
-            else await localVideoPublication.enable();
-
-            // 自分プレビューもカメラに戻す
-            video.attach(localVideo);
-            await localVideo.play();
-
-            displayVideoStream?.track?.stop?.();
-            displayVideoStream = null;
-        };
-
-        displayStreamButton.onclick = async () => {
-            displayStreamButton.style.display = "none"
-            backgroundBlurButton.style.display = "none"
-            leaveButton.style.display = "none"
-
-            const { audio, video: dispVideo } = await SkyWayStreamFactory.createDisplayStreams(
-                {
-                    audio: true, // 音声も取得する
-                    video: {
-                        displaySurface: 'monitor', // 画面全体の映像
-                    }
-                }
-            );
-            await me.unpublish(localVideoPublication.id);
-            displayVideoPublication = await me.publish(dispVideo);
-
-            // プレビューを共有映像へ
-            dispVideo.attach(localVideo);
-            await localVideo.play();
-
-            // 共有を「ブラウザの共有停止」ボタンで終えた時も復帰
-            dispVideo.track.onended = async () => {
-                await stopScreenShare();
-            };
-        }
-
+        /*** STEP 9. 退出処理 ***/
         // 自分が退室する処理
         leaveButton.onclick = async () => {
-            await localAudioPublication.disable();
-            localAudioMuteButton.textContent = "mic_off"
-            await localVideoPublication.disable();
-            localVideoMuteButton.textContent = "videocam_off";
-
             await me.leave();
             await room.dispose();
 
-            myId.textContent = "";
-            joinButton.disabled = false;
+            buttonArea.replaceChildren();
+            remoteVideoArea.replaceChildren();
+            remoteAudioArea.replaceChildren();
+
+            leaveButton.disabled = true;
             localAudioMuteButton.disabled = true;
             localVideoMuteButton.disabled = true;
-            leaveButton.disabled = true;
-            if (videoControl) videoControl.style.display = "none";
-            buttonArea?.replaceChildren();
-            document.querySelectorAll('[id^="remote-media-"]').forEach(el => el.remove());
-            document.querySelectorAll('.remote-audio').forEach(el => el.remove());
-
+            joinButton.disabled = false;
+            $("#video-controls").attr("hidden", "hidden");
         };
 
         // 他の人が退室した場合の処理
         room.onStreamUnpublished.add((e) => {
+            document.getElementById(`subscribe-button-${e.publication.id}`)?.remove();
             document.getElementById(`remote-media-${e.publication.id}`)?.remove();
-
-            const key = e.publication.publisher.name || e.publication.publisher.id;
-            const tile = document.getElementById(`remote-tile-${key}`);
-            if (tile && tile.querySelectorAll("video").length === 0) {
-                tile.remove();
-            }
         });
-
-        // ルームを切り替えた時に退出
-        $(document).on("click", ".room-title", async function () {
-            if (room && me) {
-                leaveButton.click();
-            }
-        });
-
     });
 })();
