@@ -18,12 +18,15 @@ let currentThreadId = localStorage.getItem("current-thread") || null;
 let currentRoomId = localStorage.getItem("current-room") || null;
 let messageRef = null;
 let messageValueCallback = null;
+let joinUserRef = null;
+let joinUserValueCallback = null;
 
 // Realtime Database の基準パス
 const THREAD_PATH = "thread";
 const ROOM_PATH = "room";
 const MESSAGE_PATH = "messages";
 const LIKE_PATH = "likes";
+const JOINUSER_PATH = "joinUsers";
 
 // ローカルストレージ key
 const LS_KEY_CURRENT_THREAD = "current-thread";
@@ -40,6 +43,10 @@ function getMessageRef(threadId) {
 function getLikeRef(messageId, userId) {
     const likeRef = ref(db, `${LIKE_PATH}/${messageId}/${userId}`)
     return likeRef
+}
+function getJoinUserRef(roomId) {
+    const joinUserRef = ref(db, `${JOINUSER_PATH}/${roomId}`)
+    return joinUserRef
 }
 
 // ログイン状態の監視
@@ -360,14 +367,17 @@ onValue(roomRef, (snapshot) => {
         $(".room-list").append(itemHtml);
     });
 
-    // currentRoomId があればヘッダーと messageRef をセットして購読
-    // if (currentRoomId) {
-    //     subscribeToMessages(currentRoomId);
-    // }
+    // currentRoomId があればヘッダーと joinUserRef をセットして購読
+    if (currentRoomId) {
+        subscribeToJoinUsers(currentRoomId);
+    }
 });
 
 // ルームをクリックした時の処理
 $(document).on("click", ".room-title", function () {
+    let leaveButton = document.getElementById("leave");
+    leaveButton.click()
+
     const roomId = $(this).data("room-id");
 
     // カレントクラス切り替え
@@ -381,9 +391,42 @@ $(document).on("click", ".room-title", function () {
     currentRoomId = roomId;
     localStorage.setItem(LS_KEY_CURRENT_ROOM, roomId);
 
-    // メッセージ購読し直し
-    // subscribeToMessages(roomId);
+    // 参加ユーザー購読し直し
+    subscribeToJoinUsers(roomId);
 });
+
+// 現在のスレッドのメッセージ購読
+function subscribeToJoinUsers(roomId) {
+    if (!roomId) return;
+
+    // 既存 listener があれば off する
+    if (joinUserRef && joinUserValueCallback) {
+        off(joinUserRef, "value", joinUserValueCallback);
+    }
+
+    // 新しい joinUserRef を作成
+    joinUserRef = getJoinUserRef(roomId);
+
+    // コールバックを定義
+    joinUserValueCallback = (snapshot) => {
+        snapshot.forEach((childSnapshot) => {
+            const joinUserId = childSnapshot.key;
+            const data = childSnapshot.val();
+
+            const userName = data.uN;
+
+            $("#my-name").text(`あなた:${currentUser.displayName}`);
+
+            if ($(`#label-${joinUserId}`).length > 0) {
+                $(`#label-${joinUserId}`).text(userName)
+            }
+        });
+
+    };
+
+    // onValue で購読開始
+    onValue(joinUserRef, joinUserValueCallback);
+}
 
 
 // ===============
@@ -538,6 +581,11 @@ const token = new SkyWayAuthToken({
 
         /*** STEP 5. Roomに入室して自分のIDを表示 ***/
         const me = await room.join();
+        const myJoinUserRef = ref(db, `${JOINUSER_PATH}/${currentRoomId}/${me.id}`);
+
+        set(myJoinUserRef, {
+            uN: currentUser.displayName,
+        });
 
         /*** STEP 6. 自分の映像・音声をpublish ***/
         const localAudioPublication = await me.publish(audio);
@@ -571,8 +619,9 @@ const token = new SkyWayAuthToken({
                     abs.className = "absolute";
 
                     const label = document.createElement("p");
+                    label.id = `label-${publication.publisher.id}`
                     label.className = "label";
-                    label.textContent = publication.id;
+                    label.textContent = publication.publisher.id;
 
                     abs.appendChild(label);
                     grid.appendChild(remoteMedia);
@@ -580,6 +629,7 @@ const token = new SkyWayAuthToken({
 
                     videoContent.appendChild(grid);
                     updateVideoGridLayout()
+                    subscribeToJoinUsers(currentRoomId)
 
                     break;
                 case "audio":
@@ -595,6 +645,7 @@ const token = new SkyWayAuthToken({
             }
             // };
         };
+
         //== STEP 7-2. Room入室時にすでにpublishされている映像・音声を受信 ==
         room.publications.forEach(subscribeAndAttach);
         //== STEP 7-3. Room入室後に他Memberがpublishした映像・音声を受信 ==
@@ -630,6 +681,8 @@ const token = new SkyWayAuthToken({
         leaveButton.onclick = async () => {
             await localAudioPublication.disable();
             await localVideoPublication.disable();
+
+            await remove(ref(db, `${JOINUSER_PATH}/${currentRoomId}/${me.id}`));
 
             await me.leave();
             await room.dispose();
