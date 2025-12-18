@@ -462,14 +462,14 @@ function updateVideoGridLayout() {
 
     let cols = 2, rows = 1;
 
-    if (count <= 6) {
-        cols = 3; rows = 2;      // 5～6人 → 2*3（= 3列×2行）
+    if (count <= 4) {
+        cols = 2; rows = 2;
     } else {
-        cols = 3; rows = 3;      // 7～9人 → 3*3
+        cols = 3; rows = 3;
     }
 
-    videoContent.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    videoContent.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+    videoContent.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    videoContent.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
 }
 
 /***  STEP 1. 認証・認可用のトークンを生成 ***/
